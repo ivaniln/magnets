@@ -61,6 +61,7 @@ class GameView(arcade.View):
         self.right_pressed: bool = False
         self.down_pressed: bool = False
         self.up_pressed: bool = False
+        self.mouse_pressed: bool = False
     
         self.player_list = None
         self.objects_list = None
@@ -77,12 +78,8 @@ class GameView(arcade.View):
         self.enemy_bullet_list = None
         self.shoot_cooldown = SHOOT_COOLDOWN
 
-        # Set up the player
-        self.fuel = None
-        self.jump_speed = None
-        self.movment_speed = None
-        self.scale_direction = None
-        self.can_shoot = None
+        # Variables
+        self.mouse_pressed_for = None
 
         self.physics_engine = None
         self.end_of_map = 0
@@ -145,7 +142,7 @@ class GameView(arcade.View):
             friction=WALL_FRICTION,
             collision_type="wall",
             body_type=arcade.PymunkPhysicsEngine.STATIC,
-            elasticity=0
+            elasticity=0.25
             )
 
         self.camera = arcade.Camera2D()
@@ -250,7 +247,7 @@ class GameView(arcade.View):
             
     def on_key_release(self, key, modifiers):
         """
-        Called when the user presses a mouse button.
+        Called when the user releases a key.
         """
         if key == arcade.key.LEFT or key == arcade.key.A:
             self.left_pressed = False
@@ -266,9 +263,17 @@ class GameView(arcade.View):
         Called when the user presses a mouse button.
         """
         if button == arcade.MOUSE_BUTTON_LEFT:
+            self.mouse_pressed = True
+            self.mouse_pressed_for = 5
+
+    def on_mouse_release(self, x, y, button, modifiers):
+        """
+        Called when the user releases a mouse button.
+        """
+        if button == arcade.MOUSE_BUTTON_LEFT:
             x += self.camera.position.x - WINDOW_WIDTH / 2
             y += self.camera.position.y - WINDOW_HEIGHT / 2
-            self.spawn_circle(x, y)
+            self.spawn_circle(x, y, self.mouse_pressed_for)
 
     def on_update(self, delta_time):
         """Movement and game logic"""
@@ -294,6 +299,9 @@ class GameView(arcade.View):
             if object.right < 0 or object.left > self.end_of_map or object.top < 0:
                 object.remove_from_sprite_lists()
 
+        # Player holds mouse
+        if self.mouse_pressed and self.mouse_pressed_for <= 50:
+            self.mouse_pressed_for += 1
 
         # Pan to the user
         self.pan_camera_to_user(CAMERA_PAN_SPEED)
@@ -312,16 +320,16 @@ class GameView(arcade.View):
             self.camera_bounds
         )
     
-    def spawn_circle(self, x: int, y: int):
+    def spawn_circle(self, x: int, y: int, radius: int):
         body = arcade.SpriteCircle(
-            radius=20,
+            radius=radius,
             color=(random.randint(50,255), random.randint(50,255), random.randint(0,155)),
         )
         body.position = (x, y)
         self.objects_list.append(body)
         self.physics_engine.add_sprite(
             body,
-            mass=1,
+            mass=radius*radius/250,
             friction=0.75,
             elasticity=0.75,
             damping=1,
