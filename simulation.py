@@ -46,7 +46,7 @@ PLAYER_MAX_VERTICAL_SPEED = 1000
 
 DRONE_SALING=1
 #PLAYER ANIMATION CONSTANTS
-PLAYER_SCALING = 3
+PLAYER_SCALING = 1
 DEAD_ZONE = 0.1
 RIGHT_FACING = 0 # Constants used to track if the player is facing left or right
 LEFT_FACING = 1
@@ -61,10 +61,13 @@ class GameView(arcade.View):
         self.right_pressed: bool = False
         self.down_pressed: bool = False
         self.up_pressed: bool = False
-        self.mouse_pressed: bool = False
+        self.left_mouse_pressed: bool = False
+        self.right_mouse_pressed: bool = False
     
         self.player_list = None
         self.objects_list = None
+        self.balls_list = None
+        self.magnets_list = None
 
         # Tilemap Object
         self.tile_map = None
@@ -79,7 +82,8 @@ class GameView(arcade.View):
         self.shoot_cooldown = SHOOT_COOLDOWN
 
         # Variables
-        self.mouse_pressed_for = None
+        self.left_mouse_pressed_for: int = 0
+        self.right_mouse_pressed_for: int = 0
 
         self.physics_engine = None
         self.end_of_map = 0
@@ -100,6 +104,8 @@ class GameView(arcade.View):
         self.player_list = arcade.SpriteList()
 
         self.objects_list = arcade.SpriteList()
+        self.balls_list = arcade.SpriteList()
+        self.magnets_list = arcade.SpriteList()
         
         # Set up the enemies
         self.enemy_list = arcade.SpriteList()
@@ -196,6 +202,8 @@ class GameView(arcade.View):
 
         # Draw all the sprites.
         self.objects_list.draw()
+        self.balls_list.draw()
+        self.magnets_list.draw()
         self.enemy_list.draw()
         self.wall_list.draw()
         self.coin_list.draw()
@@ -263,17 +271,27 @@ class GameView(arcade.View):
         Called when the user presses a mouse button.
         """
         if button == arcade.MOUSE_BUTTON_LEFT:
-            self.mouse_pressed = True
-            self.mouse_pressed_for = 5
+            self.left_mouse_pressed = True
+            self.left_mouse_pressed_for = 5
+        elif button == arcade.MOUSE_BUTTON_RIGHT:
+            self.right_mouse_pressed = True
+            self.right_mouse_pressed_for = 5
 
     def on_mouse_release(self, x, y, button, modifiers):
         """
         Called when the user releases a mouse button.
         """
         if button == arcade.MOUSE_BUTTON_LEFT:
+            self.left_mouse_pressed = False
             x += self.camera.position.x - WINDOW_WIDTH / 2
             y += self.camera.position.y - WINDOW_HEIGHT / 2
-            self.spawn_circle(x, y, self.mouse_pressed_for)
+            self.spawn_circle(x, y, self.left_mouse_pressed_for)
+        elif button == arcade.MOUSE_BUTTON_RIGHT:
+            self.right_mouse_pressed = False
+            x += self.camera.position.x - WINDOW_WIDTH / 2
+            y += self.camera.position.y - WINDOW_HEIGHT / 2
+            self.spawn_magnet(x, y, self.right_mouse_pressed_for)
+
 
     def on_update(self, delta_time):
         """Movement and game logic"""
@@ -294,14 +312,29 @@ class GameView(arcade.View):
         elif self.down_pressed:
             self.camera_new_position = (self.camera.position[0], self.camera.position[1] - 100)
 
+        # Magnetics mechanik
+        for magnet in self.magnets_list:
+            for ball in self.balls_list:
+                dx = magnet.position[0]-ball.position[0]
+                dy = magnet.position[1]-ball.position[1]
+                if True:
+                    self.physics_engine.apply_force(magnet, [-100*magnet.strength/(dx**2), -100*magnet.strength/(dy**2)])
+                    self.physics_engine.apply_force(ball, [10000*magnet.strength/(dx**2), 10000*magnet.strength/(dy**2)])
+                    print(f"{dx},  {dy}")
+                    print(f"{magnet.strength},  {10000*magnet.strength/(dy**2)}")
         # Clearing onjects
-        for object in self.objects_list:
+        for object in self.balls_list:
+            if object.right < 0 or object.left > self.end_of_map or object.top < 0:
+                object.remove_from_sprite_lists()
+        for object in self.magnets_list:
             if object.right < 0 or object.left > self.end_of_map or object.top < 0:
                 object.remove_from_sprite_lists()
 
         # Player holds mouse
-        if self.mouse_pressed and self.mouse_pressed_for <= 50:
-            self.mouse_pressed_for += 1
+        if self.left_mouse_pressed and self.left_mouse_pressed_for <= 50:
+            self.left_mouse_pressed_for += 1
+        if self.right_mouse_pressed and self.right_mouse_pressed_for <= 50:
+            self.right_mouse_pressed_for += 1
 
         # Pan to the user
         self.pan_camera_to_user(CAMERA_PAN_SPEED)
@@ -326,12 +359,31 @@ class GameView(arcade.View):
             color=(random.randint(50,255), random.randint(50,255), random.randint(0,155)),
         )
         body.position = (x, y)
-        self.objects_list.append(body)
+        self.balls_list.append(body)
         self.physics_engine.add_sprite(
             body,
             mass=radius*radius/250,
             friction=0.75,
             elasticity=0.75,
+            damping=1,
+            max_horizontal_velocity=PLAYER_MAX_HORIZONTAL_SPEED,
+            max_vertical_velocity=PLAYER_MAX_VERTICAL_SPEED
+        )
+
+    def spawn_magnet(self, x: int, y: int, strength: int):
+        body = arcade.Sprite(
+            "Assets\Sprite\magnet.png",
+            scale=PLAYER_SCALING / 2,
+            center_x=x,
+            center_y=y,
+        )
+        setattr(body, "strength", strength)
+        self.magnets_list.append(body)
+        self.physics_engine.add_sprite(
+            body,
+            mass=20,
+            friction=0.75,
+            elasticity=0.25,
             damping=1,
             max_horizontal_velocity=PLAYER_MAX_HORIZONTAL_SPEED,
             max_vertical_velocity=PLAYER_MAX_VERTICAL_SPEED
